@@ -12,181 +12,146 @@ import org.json.JSONObject;
 import android.content.Context;
 import android.content.Intent;
 import android.os.AsyncTask;
-import android.app.NotificationManager;
-import android.app.Notification;
-import android.content.Intent;
-import android.app.PendingIntent;
-import android.util.Log;
 
 import com.google.android.gms.gcm.GoogleCloudMessaging;
 import com.microsoft.windowsazure.messaging.NativeRegistration;
-import nl.windesheim.mobile.roosterplus.RoosterPlus;
-import nl.windesheim.mobile.roosterplus.R;
 
 /**
  * Apache Cordova plugin for Windows Azure Notification Hub
  */
-public class NotificationHub extends CordovaPlugin
-{
+public class NotificationHub extends CordovaPlugin {
 
-   /**
-    * The callback context from which we were invoked.
-    */
-   protected static CallbackContext _callbackContext = null;
+    /**
+     * The callback context from which we were invoked.
+     */
+    protected static CallbackContext _callbackContext = null;
 
-   @Override
-   public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException
-   {
-      _callbackContext = callbackContext;
-      try
-      {
+    @Override
+    public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
+        _callbackContext = callbackContext;
+        try {
+            
+            if (action.equals("registerApplication")) {   
+                    String hubName = args.getString(0);
+                    String connectionString = args.getString(1);
+					//2 for NotificatonHub_onNotificationReceivedGlobal
+					String userId = args.getString(3);
+                    String senderId = args.getString(4);
 
-         if (action.equals("registerApplication"))
-         {
-            String hubName = args.getString(0);
-            String connectionString = args.getString(1);
-            String senderId = args.getString(4);
-            registerApplication(hubName, connectionString, senderId);
-            return true;
-         }
+					/*JSONObject registrationResult = new JSONObject();
+					registrationResult.put("senderId", senderId);
+					registrationResult.put("userId", userId);
+					PluginResult pluginResult = new PluginResult(PluginResult.Status.OK, registrationResult);
+					pluginResult.setKeepCallback(true);
+					NotificationHub.getCallbackContext().sendPluginResult(pluginResult);*/
 
-         if (action.equals("unregisterApplication"))
-         {
-            String hubName = args.getString(0);
-            String connectionString = args.getString(1);
-            unregisterApplication(hubName, connectionString);
-            return true;
-         }
+                    registerApplication(hubName, connectionString, senderId,userId);
+                    return true;
+            }
+            
+            if (action.equals("unregisterApplication")) {
+                String hubName = args.getString(0);
+                String connectionString = args.getString(1);
+                unregisterApplication(hubName, connectionString);
+                return true;
+            } 
+            
+            return false; // invalid action            
+        } catch (Exception e) {
+            _callbackContext.error(e.getMessage());
+        }
+        return true;
+    }
 
-         return false; // invalid action            
-      }
-      catch (Exception e)
-      {
-         _callbackContext.error(e.getMessage());
-      }
-      return true;
-   }
+    /**
+     * Asynchronously registers the device for native notifications.
+     */
+    @SuppressWarnings("unchecked")
+    private void registerApplication(final String hubName, final String connectionString, final String senderId, final String userId) {
 
-   /**
-    * Asynchronously registers the device for native notifications.
-    */
-   @SuppressWarnings("unchecked")
-   private void registerApplication(final String hubName, final String connectionString, final String senderId)
-   {
+        try {
+            final GoogleCloudMessaging gcm = GoogleCloudMessaging.getInstance(cordova.getActivity());
+            final com.microsoft.windowsazure.messaging.NotificationHub hub = 
+                    new com.microsoft.windowsazure.messaging.NotificationHub(hubName, connectionString, cordova.getActivity());
 
-      try
-      {
-         final GoogleCloudMessaging gcm = GoogleCloudMessaging.getInstance(cordova.getActivity());
-         final com.microsoft.windowsazure.messaging.NotificationHub hub = new com.microsoft.windowsazure.messaging.NotificationHub(hubName, connectionString,
-               cordova.getActivity());
-
-         new AsyncTask()
-            {
-               @Override
-               protected Object doInBackground(Object... params)
-               {
-                  try
-                  {
-                     String gcmId = gcm.register(senderId);
-                     NativeRegistration registrationInfo = hub.register(gcmId);
-
-                     JSONObject registrationResult = new JSONObject();
-                     registrationResult.put("registrationId", registrationInfo.getRegistrationId());
-                     registrationResult.put("channelUri", registrationInfo.getGCMRegistrationId());
-                     registrationResult.put("notificationHubPath", registrationInfo.getNotificationHubPath());
-                     registrationResult.put("event", "registerApplication");
-
-                     PluginResult pluginResult = new PluginResult(PluginResult.Status.OK, registrationResult);
-                     // keepKallback is used to continue using the same callback to notify about push notifications received
-                     pluginResult.setKeepCallback(true);
-
-                     NotificationHub.getCallbackContext().sendPluginResult(pluginResult);
-
-                  }
-                  catch (Exception e)
-                  {
-                     NotificationHub.getCallbackContext().error(e.getMessage());
-                  }
-                  return null;
+            new AsyncTask() {
+                @Override
+                protected Object doInBackground(Object... params) {
+                   try {
+                      String gcmId = gcm.register(senderId);
+					  String[] tags = {userId};
+                      NativeRegistration registrationInfo = hub.register(gcmId,tags);
+					//NativeRegistration registrationInfo = hub.register(gcmId);
+                      
+                      JSONObject registrationResult = new JSONObject();
+                      registrationResult.put("registrationId", registrationInfo.getRegistrationId());
+                      registrationResult.put("channelUri", registrationInfo.getGCMRegistrationId());
+                      registrationResult.put("notificationHubPath", registrationInfo.getNotificationHubPath());
+                      registrationResult.put("event", "registerApplication");
+                      
+                      PluginResult pluginResult = new PluginResult(PluginResult.Status.OK, registrationResult);
+                      // keepKallback is used to continue using the same callback to notify about push notifications received
+                      pluginResult.setKeepCallback(true); 
+                      
+                      NotificationHub.getCallbackContext().sendPluginResult(pluginResult);
+                      
+                   } catch (Exception e) {
+                       NotificationHub.getCallbackContext().error(e.getMessage());
+                   }
+                   return null;
                }
-            }.execute(null, null, null);
-      }
-      catch (Exception e)
-      {
-         NotificationHub.getCallbackContext().error(e.getMessage());
-      }
-   }
+             }.execute(null, null, null);
+        } catch (Exception e) {
+            NotificationHub.getCallbackContext().error(e.getMessage());
+        }
+    }
 
-   /**
-    * Unregisters the device for native notifications.
-    */
-   private void unregisterApplication(final String hubName, final String connectionString)
-   {
-      try
-      {
-         final com.microsoft.windowsazure.messaging.NotificationHub hub = new com.microsoft.windowsazure.messaging.NotificationHub(hubName, connectionString,
-               cordova.getActivity());
-         hub.unregister();
-         NotificationHub.getCallbackContext().success();
-      }
-      catch (Exception e)
-      {
-         NotificationHub.getCallbackContext().error(e.getMessage());
-      }
-   }
+    /**
+     * Unregisters the device for native notifications.
+     */
+    private void unregisterApplication(final String hubName, final String connectionString) {
+        try {
+            final com.microsoft.windowsazure.messaging.NotificationHub hub = 
+                    new com.microsoft.windowsazure.messaging.NotificationHub(hubName, connectionString, cordova.getActivity());
+            hub.unregister();
+            NotificationHub.getCallbackContext().success();            
+        } catch (Exception e) {
+            NotificationHub.getCallbackContext().error(e.getMessage());
+        }
+    }
+    
+    /**
+     * Handles push notifications received.
+     */
+    public static class PushNotificationReceiver extends android.content.BroadcastReceiver {
 
-   /**
-    * Handles push notifications received.
-    */
-   public static class PushNotificationReceiver extends android.content.BroadcastReceiver
-   {
-
-      @Override
-      public void onReceive(Context context, Intent intent)
-      {
-         Log.d("onReceive() ","Received push "+intent);
-         if (NotificationHub.getCallbackContext() == null)
-         {
-            NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
-            long when = System.currentTimeMillis();
-            int icon = R.drawable.icon;
-            String tickerText = "New notification";
+        @Override
+        public void onReceive(Context context, Intent intent) {
             
-            Intent notificationIntent = new Intent(context, RoosterPlus.class);
-            
-            Notification notification = new Notification(icon, tickerText, when);
-            notification.contentIntent = PendingIntent.getActivity(context, 0, notificationIntent, Intent.FLAG_ACTIVITY_NEW_TASK);
-            notification.setLatestEventInfo(context, context.getString(R.string.app_name), tickerText, notification.contentIntent);
-            nm.notify(R.string.app_name, notification);
-         }
-         else
-         {
+            if (NotificationHub.getCallbackContext() == null){
+                return;
+            }                                    
             JSONObject json = new JSONObject();
-            try
-            {
-               Set<String> keys = intent.getExtras().keySet();
-               for (String key : keys)
-               {
-                  json.put(key, intent.getExtras().get(key));
-               }
-               PluginResult result = new PluginResult(PluginResult.Status.OK, json);
-               result.setKeepCallback(true);
-               NotificationHub.getCallbackContext().sendPluginResult(result);
+            try {
+                
+                Set<String> keys = intent.getExtras().keySet();
+                for (String key : keys) {
+                    json.put(key, intent.getExtras().get(key));
+                }
+                PluginResult result = new PluginResult(PluginResult.Status.OK, json);
+                result.setKeepCallback(true);
+                NotificationHub.getCallbackContext().sendPluginResult(result);
+            } catch (JSONException e) {
+                e.printStackTrace();
             }
-            catch (JSONException e)
-            {
-               e.printStackTrace();
-            }
-         }
-      }
-
-   }
-
-   /**
-    * Returns plugin callback.
-    */
-   protected static CallbackContext getCallbackContext()
-   {
-      return _callbackContext;
-   }
+        }
+        
+    }
+    
+    /**
+     * Returns plugin callback.
+     */
+    protected static CallbackContext getCallbackContext() {
+        return _callbackContext;
+    }
 }
